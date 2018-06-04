@@ -5,7 +5,14 @@
 FaceDetector::FaceDetector(const string CASCADE_FILE_NAME, const string SMILE_CASCADE_FILE_NAME, VideoCapture &cap)
 {
 	setFaceCascade(CASCADE_FILE_NAME); // カスケードファイルをセット -> m_faceCascade
-	//setSmileCascade(SMILE_CASCADE_FILE_NAME); // 笑顔のカスケードファイルをセット -> m_smileCascade
+	setSmileCascade(SMILE_CASCADE_FILE_NAME); // 笑顔のカスケードファイルをセット -> m_smileCascade
+	setVideoCapture(cap); // カメラ映像をセット -> m_videoCapture
+}
+
+// コンストラクタ
+FaceDetector::FaceDetector(const string CASCADE_FILE_NAME, VideoCapture &cap)
+{
+	setFaceCascade(CASCADE_FILE_NAME); // カスケードファイルをセット -> m_faceCascade
 	setVideoCapture(cap); // カメラ映像をセット -> m_videoCapture
 }
 
@@ -85,11 +92,11 @@ Point FaceDetector::getFacePositionAndDetect(Mat &frame)
 	resize(frame, resizedFrame, resizedFrameSize);
 
 	if (m_foundFace == false) { // 顔が見つからなければフレーム全体に渡ってHaarLike検出
-		cout << " [ 顔認識失敗. フレーム全体検出を行います ]";
+		cout << "Not Found. ";
 		detectFaceAllSizes(resizedFrame);
 	}
 	else { // 顔が見つかった場合、ROI内でのみHaarLike検出する
-		cout << " [ 顔認識成功. ROI内検出を行います ]";
+		cout << "Found! ";
 		//detectFaceAllSizes(resizedFrame);
 		detectFaceAroundRoi(resizedFrame); // ROI内で顔検出
 		//detectSmileAroundRoi(resizedFrame); // ROI内で笑顔検出(追記)
@@ -314,10 +321,10 @@ void FaceDetector::detectFacesTemplateMatching(Mat &resizedFrame)
 Rect FaceDetector::getFaceRect()
 {
 	Rect faceRect = m_trackedFace;
-	faceRect.x = (int)faceRect.x / m_scale;
-	faceRect.y = (int)faceRect.y / m_scale;
-	faceRect.width = (int)faceRect.width / m_scale;
-	faceRect.height = (int)faceRect.height / m_scale;
+	faceRect.x = faceRect.x / m_scale;
+	faceRect.y = faceRect.y / m_scale;
+	faceRect.width = faceRect.width / m_scale;
+	faceRect.height = faceRect.height / m_scale;
 
 	return faceRect;
 }
@@ -340,8 +347,22 @@ Point FaceDetector::getSmileCenterPoint()
 	return smilePos;
 }
 
-// 演算子のオーバーロード、オブジェクト生成時にカメラ映像とcascade fileを渡す
-Point FaceDetector::operator>>(Mat &frame)
+// 関数を放り込んで処理時間を計測する
+template<typename Function>
+auto FaceDetector::measureProcessTime(Function func)
 {
-	return this->getFacePositionAndDetect(frame);
+	auto start = high_resolution_clock::now();
+	func();
+	auto end = high_resolution_clock::now();
+	auto duration = duration_cast<milliseconds>(end - start).count();
+	cout << duration << " ms.\n";
+	return duration;
+}
+
+// 演算子のオーバーロード、オブジェクト生成時にカメラ映像とcascade fileを渡す
+void FaceDetector::operator>>(Mat &frame)
+{
+	measureProcessTime([this, &frame]() {
+		this->getFacePositionAndDetect(frame);
+	});
 }

@@ -3,44 +3,6 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-const auto GNUPLOT_PATH = "C:/PROGRA~1/gnuplot/bin/gnuplot.exe";
-
-void startGnuPlot() {
-	FILE *gnuplot;
-	if ((gnuplot = _popen(GNUPLOT_PATH, "w")) == nullptr) {
-		printf("gnuplotを開けませんでした。\n");
-		exit(EXIT_FAILURE);
-	}
-	else {
-		cout << "gnuplotを開きました." << endl;
-	}
-
-	fprintf(gnuplot, "set xrange[-10:10]\n");
-	fprintf(gnuplot, "set yrange[-10:10]\n");
-
-	cout << M_PI << "" << endl;
-	
-	string str_buf = "plot ";
-	for (int i = 1; i <= 5; i+=2) {
-		str_buf += "4*sin(" + to_string(2*i-1) + "*x)/" + to_string(atan(1)*4) + "*" + to_string(2*i-1);
-		if (i >= 5) {
-			str_buf += "\n";
-		}
-		else {
-			str_buf += "+";
-		}
-	}
-	cout << str_buf << endl;
-	const char* char_buf = str_buf.c_str();
-
-	fprintf(gnuplot, char_buf);
-
-	fflush(gnuplot);
-	system("pause"); // 一時停止
-	fprintf(gnuplot, "exit\n");
-	_pclose(gnuplot);
-}
-
 // コンストラクタ
 KGraph::KGraph(Mat & frame)
 {

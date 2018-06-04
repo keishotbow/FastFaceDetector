@@ -1,16 +1,19 @@
 #pragma once
 
 #include <iostream>
+#include <chrono>
 #include <opencv2\opencv.hpp>
 #pragma comment(lib, "opencv_world341d.lib")
 #pragma comment(lib, "opencv_world341.lib")
 
 using namespace std;
 using namespace cv;
+using namespace chrono;
 
 class FaceDetector
 {
 public:
+	FaceDetector(const string CASCADE_FILE_NAME, VideoCapture & cap); // コンストラクタ
 	FaceDetector(const string CASCADE_FILE_NAME, const string SMILE_CASCADE_FILE_NAME, VideoCapture &cap); // コンストラクタ
 	~FaceDetector(); // デストラクタ
 
@@ -21,7 +24,7 @@ public:
 	bool isFaceFound(); // 顔が見つかったかどうか
 	bool isSmileFound(); // 笑顔が見つかったかどうか
 
-	Point operator>>(Mat & frame); // オブジェクト生成時にカメラ映像とcascade file渡す
+	void operator>>(Mat & frame); // オブジェクト生成時にカメラ映像とcascade file渡す
 
 	Rect getFaceRect(); // 顔領域を検出する
 
@@ -67,4 +70,7 @@ private:
 		void detectFaceAroundRoi(const Mat & resizedFrame); // ROI内で顔を検出する
 		void detectFacesTemplateMatching(Mat & resizedFrame); // Template Matchingで顔を検出する
 		void detectSmileAroundRoi(const Mat & resizedFrame); // 笑顔検出用
+
+	template<typename Function>
+	auto measureProcessTime(Function func);
 };
