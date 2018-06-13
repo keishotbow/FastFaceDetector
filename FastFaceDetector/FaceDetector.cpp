@@ -7,11 +7,16 @@ FaceDetector::FaceDetector(const string CASCADE_FILE_NAME, const string SMILE_CA
 	setFaceCascade(CASCADE_FILE_NAME); // カスケードファイルをセット -> m_faceCascade
 	setSmileCascade(SMILE_CASCADE_FILE_NAME); // 笑顔のカスケードファイルをセット -> m_smileCascade
 	setVideoCapture(cap); // カメラ映像をセット -> m_videoCapture
+	ofs.open("BGRave.csv");
+	if (ofs.fail()) {
+		exit(1);
+	}
 }
 
 // コンストラクタ
 FaceDetector::FaceDetector(const string CASCADE_FILE_NAME, VideoCapture &cap)
 {
+	ofs.open("BGRave.csv");
 	setFaceCascade(CASCADE_FILE_NAME); // カスケードファイルをセット -> m_faceCascade
 	setVideoCapture(cap); // カメラ映像をセット -> m_videoCapture
 }
@@ -26,6 +31,7 @@ FaceDetector::~FaceDetector()
 	if (m_smileCascade != nullptr) {
 		delete m_smileCascade; // ポインタ解放
 	}
+	ofs.close();
 }
 
 // Cascade Fileをセットする(コンストラクタからオブジェクト生成時に呼び出される)
@@ -87,22 +93,33 @@ Point FaceDetector::getFacePositionAndDetect(Mat &frame)
 	// 取得フレームをダウンスケールし、resizedFrameSizeに格納する
 	m_scale = (double)min(m_resizedWidth, frame.cols) / frame.cols;
 	Size resizedFrameSize = Size((int)(m_scale*frame.cols), (int)(m_scale*frame.rows));
-
 	Mat resizedFrame(resizedFrameSize, CV_8UC3); // リサイズした画像
 	resize(frame, resizedFrame, resizedFrameSize);
 
 	if (m_foundFace == false) { // 顔が見つからなければフレーム全体に渡ってHaarLike検出
-		cout << "Not Found. ";
+		cout << "Not Found. \n";
 		detectFaceAllSizes(resizedFrame);
 	}
 	else { // 顔が見つかった場合、ROI内でのみHaarLike検出する
-		cout << "Found! ";
-		//detectFaceAllSizes(resizedFrame);
+		cout << "\tFound! \n";
 		detectFaceAroundRoi(resizedFrame); // ROI内で顔検出
+
+		extractSkinColor(frame); // ROI放り込んで肌色抽出
+		//Scalar ave = calcBGRAverage(roi_image, mask_image);
+		//imshow("roi", roi_image);
+		//cout << " ave: " << ave << ", ";
+		//cout << "B=" << ave.val[0];
+		//cout << "\tG=" << ave.val[1];
+		//cout << "\tR=" << ave.val[2];
+		//cout << "\t";
+		//ofs << ave.val[0] << ",";
+		//ofs << ave.val[1] << ",";
+		//ofs << ave.val[2] << endl;
 		//detectSmileAroundRoi(resizedFrame); // ROI内で笑顔検出(追記)
 		if (m_templateMatchingRunning == true) { // Template Matchingを動作させる
 			detectFacesTemplateMatching(resizedFrame);
 		}
+
 	}
 
 	return m_facePosition;
@@ -115,24 +132,19 @@ void FaceDetector::detectFaceAllSizes(const Mat &resizedFrame)
 		, Size(resizedFrame.rows / 5, resizedFrame.rows / 5)		// 検出の最小サイズ
 		, Size(resizedFrame.rows * 2 / 3, resizedFrame.rows * 2 / 3));  // 検出の最大サイズ
 
-	if (m_allFaces.empty()) return;
+	if (m_allFaces.size() == 0) return;
 
 	m_foundFace = true; // detectMultiScaleにより顔が見つかった
-
 	m_trackedFace = biggestFace(m_allFaces); // 検出した顔の内最大サイズの顔を返す
-
-	m_faceTemplate = getFaceTemplate(resizedFrame, m_trackedFace); // 検出された顔の部分領域(テンプレート画像)を得る
-	
+	m_faceTemplate = getFaceTemplate(resizedFrame, m_trackedFace); // 検出された顔の部分領域(テンプレート画像)を得る	
 	m_faceRoi = doubleRectSize(m_trackedFace, Rect(0, 0, resizedFrame.cols, resizedFrame.rows)); // ROI計算
-
 	m_facePosition = centerOfRect(m_trackedFace); // 検出された顔の中心を計算する
 }
 
 // HaarLikeで検出された顔領域の内、最も大きい顔領域を返す
 Rect FaceDetector::biggestFace(vector<Rect> & allFaces) const
 {
-	//assert(!allFaces.empty());
-	
+	assert(!allFaces.empty());
 	Rect *biggest = &allFaces[0]; // 顔が収められている配列の先頭を指すポインタ
 	
 	for (auto &face : allFaces) {
@@ -199,8 +211,8 @@ inline Point FaceDetector::centerOfRect(const Rect & trackedFace) {
 void FaceDetector::detectFaceAroundRoi(const Mat &resizedFrame)
 {
 	m_faceCascade->detectMultiScale(resizedFrame(m_faceRoi), m_allFaces, 1.1, 3, 0
-		, Size(m_trackedFace.width * 8 / 10, m_trackedFace.height * 8 / 10)
-		, Size(m_trackedFace.width * 12 / 10, m_trackedFace.height * 12 / 10));
+		, Size(m_trackedFace.width * 0.8, m_trackedFace.height * 0.8)
+		, Size(m_trackedFace.width * 1.2, m_trackedFace.height * 1.2));
 
 	if (m_allFaces.empty()) {
 		// テンプレートマッチングをスタートさせる
@@ -258,6 +270,48 @@ void FaceDetector::detectSmileAroundRoi(const Mat & resizedFrame)
 	m_smilePosition = centerOfRect(m_trackedSmile);
 }
 
+// フレームの画素値の平均値を返す
+Scalar FaceDetector::calcBGRAverage( Mat & roi_image, const Mat & mask_image){
+	for (int i = 0; i < roi_image.total(); i++) {
+		if (mask_image.data[i] == 255) {
+			roi_image.data[i] = 0;
+		}
+	}
+	return mean(mask_image);
+}
+
+// ROI画像を受け取って肌色抽出を行う
+Scalar FaceDetector::extractSkinColor(const Mat & frame)
+{
+	Mat roi_image = frame(getFaceRect()).clone();
+	Mat hsv_image, mask_image;
+	
+	cvtColor(roi_image, hsv_image, COLOR_BGR2HSV);
+
+	Scalar scalar_min = Scalar(0, 58, 88); // 肌色最低値
+	Scalar scalar_max = Scalar(25, 173, 229); // 肌色最高値
+
+	inRange(hsv_image, scalar_min, scalar_max, mask_image); // 肌色抽出
+	//cvtColor(mask_image, mask_image, CV_GRAY2BGR);
+
+	Vec3b *bgr;
+
+	for (int y = 0; y < roi_image.rows; y++) {
+		for (int x = 0; x < roi_image.cols; x++) {
+			if (*mask_image.ptr<Vec2b>(y, x) == Vec2b(0, 255)) {
+				Vec3b *bgr = roi_image.ptr<Vec3b>(y, x);
+				for (auto &p : bgr) {
+					　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+				}
+			}
+		}
+	}
+	
+	imshow("mask", mask_image);
+	imshow("roi", roi_image);
+	return Scalar();
+}
+
 // Template Matchingで顔を検出する
 void FaceDetector::detectFacesTemplateMatching(Mat &resizedFrame)
 {
@@ -292,8 +346,8 @@ void FaceDetector::detectFacesTemplateMatching(Mat &resizedFrame)
 	}
 
 	// テンプレートマッチング開始
-	//matchTemplate(resizedFrame(m_faceRoi), m_faceTemplate, m_matchingResult, CV_TM_SQDIFF);
-	matchTemplate(resizedFrame(m_faceRoi), m_faceTemplate, m_matchingResult, CV_TM_SQDIFF_NORMED);
+	matchTemplate(resizedFrame(m_faceRoi), m_faceTemplate, m_matchingResult, CV_TM_SQDIFF);
+	//matchTemplate(resizedFrame(m_faceRoi), m_faceTemplate, m_matchingResult, CV_TM_SQDIFF_NORMED);
 	normalize(m_matchingResult, m_matchingResult, 0, 1, NORM_MINMAX, -1, Mat());
 	double min, max;
 	Point minLoc, maxLoc;
@@ -329,6 +383,16 @@ Rect FaceDetector::getFaceRect()
 	return faceRect;
 }
 
+// 顔領域の中の更に小さな肌領域を算出
+Rect FaceDetector::getFaceROIRect() {
+	Rect faceRoiRect = getFaceRect();
+	faceRoiRect.x = faceRoiRect.x * 1.2;
+	faceRoiRect.y = faceRoiRect.y * 1.2;
+	faceRoiRect.width = faceRoiRect.width * 0.5;
+	faceRoiRect.height = faceRoiRect.height * 0.5;
+	return faceRoiRect;
+}
+
 // 顔領域の中心点を取得
 Point FaceDetector::getFaceCenterPoint()
 {
@@ -362,7 +426,15 @@ auto FaceDetector::measureProcessTime(Function func)
 // 演算子のオーバーロード、オブジェクト生成時にカメラ映像とcascade fileを渡す
 void FaceDetector::operator>>(Mat &frame)
 {
-	measureProcessTime([this, &frame]() {
+	/*measureProcessTime([this, &frame]() {
 		this->getFacePositionAndDetect(frame);
-	});
+	});*/
+	this->getFacePositionAndDetect(frame);
+}
+
+Mat FaceDetector::getTrackedFace() {
+	if (!m_trackedFace.empty()) {
+	}
+	Mat frame;
+	return frame;
 }
