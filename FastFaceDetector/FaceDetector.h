@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <memory>
 #include <opencv2\opencv.hpp>
 
 using namespace std;
@@ -55,11 +56,10 @@ private:
 	Rect m_trackedSmile; // 検出された笑顔
 	Rect m_faceRoi; // 顔領域のROI
 	Mat  m_faceTemplate; // 検出した顔の部分領域のテンプレート画像
-	Mat  m_faceORB; 
 
 	bool   m_templateMatchingRunning = false; // Template Matchingが動作しているか。初期値はfalse
-	int64 m_templateMatchingStartTime; // Template Matching開始時間(初期値は0秒)
-	int64 m_templateMatchingCurrentTime; // Template Matchingの動作時間
+	int64  m_templateMatchingStartTime; // Template Matching開始時間(初期値は0秒)
+	int64  m_templateMatchingCurrentTime; // Template Matchingの動作時間
  	double m_templateMathingMaxDuration = 3; // Template Matchingの最大動作時間(任意に変更可)
 	Mat    m_matchingResult; // テンプレマッチングの結果を格納する
 
@@ -78,12 +78,4 @@ private:
 	auto measureProcessTime(Function func);
 	Scalar calcBGRAverage( Mat & roi_image, const Mat & mask_image);
 	Scalar extractSkinColor(const Mat & frame);
-	double sum_of_green = 0.0;
-	double ave_of_green = 0.0;
-	double sum = 0;
-	Vec3b hsv;
-
-	vector<KeyPoint> keyPoint1, keyPoint2; // 特徴点を格納
-	Mat descriptor1, descriptor2;// 特徴量を格納
-	Ptr<ORB> feature = ORB::create(); // 特徴点抽出と特徴量のアルゴリズムのオブジェクト生成
 };

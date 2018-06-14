@@ -105,17 +105,7 @@ Point FaceDetector::getFacePositionAndDetect(Mat &frame)
 		detectFaceAroundRoi(resizedFrame); // ROI内で顔検出
 
 		extractSkinColor(frame); // ROI放り込んで肌色抽出
-		//Scalar ave = calcBGRAverage(roi_image, mask_image);
-		//imshow("roi", roi_image);
-		//cout << " ave: " << ave << ", ";
-		//cout << "B=" << ave.val[0];
-		//cout << "\tG=" << ave.val[1];
-		//cout << "\tR=" << ave.val[2];
-		//cout << "\t";
-		//ofs << ave.val[0] << ",";
-		//ofs << ave.val[1] << ",";
-		//ofs << ave.val[2] << endl;
-		//detectSmileAroundRoi(resizedFrame); // ROI内で笑顔検出(追記)
+
 		if (m_templateMatchingRunning == true) { // Template Matchingを動作させる
 			detectFacesTemplateMatching(resizedFrame);
 		}
@@ -211,8 +201,8 @@ inline Point FaceDetector::centerOfRect(const Rect & trackedFace) {
 void FaceDetector::detectFaceAroundRoi(const Mat &resizedFrame)
 {
 	m_faceCascade->detectMultiScale(resizedFrame(m_faceRoi), m_allFaces, 1.1, 3, 0
-		, Size(m_trackedFace.width * 0.8, m_trackedFace.height * 0.8)
-		, Size(m_trackedFace.width * 1.2, m_trackedFace.height * 1.2));
+		, Size(m_trackedFace.width * 8 / 10, m_trackedFace.height * 8 / 10)
+		, Size(m_trackedFace.width * 12 / 10, m_trackedFace.height * 12 / 10));
 
 	if (m_allFaces.empty()) {
 		// テンプレートマッチングをスタートさせる
@@ -294,18 +284,40 @@ Scalar FaceDetector::extractSkinColor(const Mat & frame)
 	inRange(hsv_image, scalar_min, scalar_max, mask_image); // 肌色抽出
 	//cvtColor(mask_image, mask_image, CV_GRAY2BGR);
 
-	Vec3b *bgr;
+	unsigned int count = 0;
+	auto start = high_resolution_clock::now();
+	int blue = 0, green = 0, red = 0;
+	double blue_ave, green_ave, red_ave;
 
 	for (int y = 0; y < roi_image.rows; y++) {
+		Vec3b *first_row_ptr = roi_image.ptr<Vec3b>(y); // 画像の行の先頭のポインタ取得
 		for (int x = 0; x < roi_image.cols; x++) {
-			if (*mask_image.ptr<Vec2b>(y, x) == Vec2b(0, 255)) {
-				Vec3b *bgr = roi_image.ptr<Vec3b>(y, x);
-				for (auto &p : bgr) {
-					　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
-				}
-			}
+			Vec3b bgr = first_row_ptr[x];
+			blue  += bgr[0];
+			green += bgr[1];
+			red   += bgr[2];
+			//Vec3b bgr = move(first_row_ptr[x]);
+			/*if (*mask_image.ptr<Vec3b>(x) == Vec3b(255, 255, 255)) {
+				*mask_image.ptr<Vec3b>(x) = Vec3b(100, 100, 100);
+			}*/
+			//cout << bgr[0] << ", " << bgr[1] << ", " << bgr[2] << " ";
+			count++;
 		}
 	}
+
+	blue_ave  = blue / count;
+	green_ave = green / count;
+	red_ave   = red / count;
+
+	cout << "B_ave: " << blue_ave  << ", ";
+	cout << "G_ave: " << green_ave << ", ";
+	cout << "R_ave: " << red_ave   << " ";
+
+	ofs << blue_ave << "," << green_ave << "," << red_ave << endl;
+
+	auto end = high_resolution_clock::now();
+	auto duration = duration_cast<milliseconds>(end - start).count();
+	cout << duration << " ms ";
 	
 	imshow("mask", mask_image);
 	imshow("roi", roi_image);
